@@ -1,0 +1,34 @@
+{
+  "name": "voice-ai-assistant",
+  "version": "1.0.0",
+  "description": "Production-ready MVP backend for a Voice AI Assistant",
+  "main": "src/app.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js"
+  },
+  "keywords": [
+    "voice",
+    "ai",
+    "assistant",
+    "express",
+    "gemini",
+    "elevenlabs"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "axios": "^1.8.4",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mongoose": "^8.23.0",
+    "multer": "^2.0.2",
+    "openai": "^4.104.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
