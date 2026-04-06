@@ -88,6 +88,15 @@ export default function VoiceConsolePage() {
     }
   }, [conversationId]);
 
+  async function ensureMicrophoneAccess() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error("This browser does not support microphone access.");
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach((track) => track.stop());
+  }
+
   useEffect(() => {
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -131,7 +140,12 @@ export default function VoiceConsolePage() {
 
     recognition.onerror = (event) => {
       if (event.error !== "no-speech") {
-        setError(`Microphone error: ${event.error}`);
+        const friendlyMessage =
+          event.error === "not-allowed" || event.error === "service-not-allowed"
+            ? "Microphone access was blocked. Use HTTPS and allow mic permission in the browser."
+            : `Microphone error: ${event.error}`;
+
+        setError(friendlyMessage);
       }
     };
 
@@ -155,8 +169,19 @@ export default function VoiceConsolePage() {
 
     setError("");
     setInterimTranscript("");
-    recognitionRef.current.start();
-    setListening(true);
+
+    ensureMicrophoneAccess()
+      .then(() => {
+        recognitionRef.current.start();
+        setListening(true);
+      })
+      .catch((permissionError) => {
+        setError(
+          permissionError?.name === "NotAllowedError"
+            ? "Microphone permission denied. Allow mic access in the browser and try again."
+            : permissionError.message || "Unable to access microphone."
+        );
+      });
   }
 
   function stopListening() {
