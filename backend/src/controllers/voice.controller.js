@@ -4,6 +4,40 @@ const { handleConversationTurn } = require("../services/conversation.service");
 const { synthesizeSpeech } = require("../services/tts.service");
 const logger = require("../utils/logger");
 
+function getProviderErrorMessage(error, fallbackMessage) {
+  const status = error?.status || error?.response?.status;
+
+  if (status === 401) {
+    return "Provider authentication failed. Please verify the API key configuration.";
+  }
+
+  if (status === 429) {
+    return "Provider rate limit exceeded. Please retry after a short wait.";
+  }
+
+  if (error?.message?.includes("Connection error")) {
+    return "Provider connection failed. Please check deployment network access and API availability.";
+  }
+
+  return fallbackMessage;
+}
+
+async function buildAudioPayload(replyText) {
+  try {
+    const audioBuffer = await synthesizeSpeech(replyText);
+    return {
+      mimeType: "audio/mpeg",
+      base64: audioBuffer.toString("base64")
+    };
+  } catch (error) {
+    logger.warn("voice.controller", "Text-to-speech failed. Returning text-only response.", {
+      message: error.message,
+      status: error?.response?.status || error?.status
+    });
+    return null;
+  }
+}
+
 async function processVoice(req, res, next) {
   const uploadedFile = req.file;
 
@@ -15,7 +49,22 @@ async function processVoice(req, res, next) {
     const conversationId = String(req.body.conversationId || "default");
     logger.info("voice.controller", "Processing voice request", { conversationId });
 
-    const transcript = await transcribeAudio(uploadedFile.path);
+    let transcript;
+
+    try {
+      transcript = await transcribeAudio(uploadedFile.path);
+    } catch (error) {
+      logger.warn("voice.controller", "Speech-to-text failed.", {
+        message: error.message,
+        status: error?.response?.status || error?.status
+      });
+      return res.status(error?.status || error?.response?.status || 503).json({
+        error: getProviderErrorMessage(
+          error,
+          "Speech transcription failed. Please try the live microphone mode or retry later."
+        )
+      });
+    }
 
     if (!transcript) {
       return res.status(400).json({ error: "Could not transcribe audio" });
@@ -26,17 +75,13 @@ async function processVoice(req, res, next) {
       userText: transcript
     });
 
-    const audioBuffer = await synthesizeSpeech(aiResult.reply);
-    const audioBase64 = audioBuffer.toString("base64");
+    const audio = await buildAudioPayload(aiResult.reply);
 
     return res.status(200).json({
       conversationId,
       transcript,
       ...aiResult,
-      audio: {
-        mimeType: "audio/mpeg",
-        base64: audioBase64
-      }
+      audio
     });
   } catch (error) {
     return next(error);
@@ -63,17 +108,13 @@ async function processLiveTurn(req, res, next) {
       userText: transcript
     });
 
-    const audioBuffer = await synthesizeSpeech(aiResult.reply);
-    const audioBase64 = audioBuffer.toString("base64");
+    const audio = await buildAudioPayload(aiResult.reply);
 
     return res.status(200).json({
       conversationId,
       transcript,
       ...aiResult,
-      audio: {
-        mimeType: "audio/mpeg",
-        base64: audioBase64
-      }
+      audio
     });
   } catch (error) {
     return next(error);
